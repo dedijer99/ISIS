@@ -182,16 +182,4 @@ export class ForecastComponent implements OnInit {
       }
     });
   }
-
-  csv() {
-    this.service.csv().subscribe({
-      next: (data) => {
-        this.toastr.success('CSV saved!');
-      },
-      error: (error) => {
-        this.toastr.error(error.error.error);
-      }
-    });
-  }
-
 }

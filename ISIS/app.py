@@ -14,7 +14,7 @@ CORS(app)
 app.config['CORS_HEADERS'] = 'Content-Type'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 data_preprocessor = Preprocessor(UPLOAD_FOLDER)
-model_creator = ModelFactory()
+model_factory = ModelFactory()
 
 @app.route("/")
 def main():
@@ -25,55 +25,86 @@ def allowed_file(filename):
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-@app.route('/api/populate', methods=['POST'])
-def upload_file():
-    if request.method == 'POST':
-        # check if the post request has the file part
-        if 'filesLength' not in request.form:
-            return {"data":"No file part"}, 400
+@app.route('/api/model/train', methods=['POST'])
+def train_model():
+    try:
+        start_date = parse_date(request.form['dateFrom'])
+        end_date = parse_date(request.form['dateTo'])
+    except KeyError as e:
+        return {"error": f"Missing parameter: {e}"}, 400
+    except ValueError as e:
+        return {"error": f"Invalid parameter value: {e}"}, 400
 
-        filesLength = int(request.form['filesLength'])
-        if filesLength <= 0:
-            return {"data":"No selected files"}, 400
+    initiate_training(start_date, end_date)
+    return {"data": "OK"}, 200
 
-        for i in range(filesLength):
-            file = request.files['file[' + str(i) + ']']
-            if file.filename == '':
-                return {"data":"Empty file uploaded"}, 400
-            if file and allowed_file(file.filename):
-                filename = secure_filename(file.filename)
-                file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+@app.route('/api/forecast-data', methods=['POST'])
+def handle_forecast_data_upload():
+    try:
+        files_count = get_files_count(request.form)
+        process_uploaded_files(request, files_count)
+    except ValueError as e:
+        return {"error": str(e)}, 400
 
-        data_preprocessor.process_data()
-        return {"data": "OK"}, 200
+    data_preprocessor.process_data()
+    return {"data": "OK"}, 200
 
-@app.route('/api/train', methods=['POST'])
-def model_training():
-    if request.method == 'POST':
-        dateFrom = request.form['dateFrom'].split('-')
-        dateTo = request.form['dateTo'].split('-')
+@app.route('/api/forecast-data/predict', methods=['POST'])
+def predict_forecast():
+    try:
+        model_path = request.form['model']
+        forecast_days = int(request.form['days'])
+        forecast_date = parse_date(request.form['date'])
+    except KeyError as e:
+        return {"error": f"Missing parameter: {e}"}, 400
+    except ValueError as e:
+        return {"error": f"Invalid parameter value: {e}"}, 400
 
-        if dateFrom[0] == dateTo[0] and dateFrom[1] == dateTo[1] and dateFrom[2] == dateTo[2]:
-            model_creator.initiate_training_procedure(0,0,0,0,0,0)
-        else:
-            model_creator.initiate_training_procedure(int(dateFrom[0]),int(dateFrom[1]),int(dateFrom[2]),
-                                               int(dateTo[0]),int(dateTo[1]),int(dateTo[2]))
-        return {"data": "OK"}, 200
+    return model_factory.execute_forecast(forecast_days, *forecast_date, model_path)
 
-@app.route('/api/test', methods=['POST'])
-def test():
-    if request.method == 'POST':
-        model_creator.set_path('{}'.format(request.form['model']))
-        pred_days = request.form['days']
-        pred_date = request.form['date'].split('-')
+def parse_date(date_str: str) -> tuple:
+    try:
+        year, month, day = map(int, date_str.split('-'))
+        return year, month, day
+    except ValueError:
+        raise ValueError("Date must be in 'YYYY-MM-DD' format")
+    
+def get_files_count(form_data):
+    if 'filesLength' not in form_data:
+        raise ValueError("No file part in the request")
 
-        return model_creator.execute_forecast(int(pred_days), int(pred_date[0]), int(pred_date[1]), int(pred_date[2]), request.form['model'])
+    files_length = int(form_data['filesLength'])
+    if files_length <= 0:
+        raise ValueError("No selected files")
+    
+    return files_length
 
-@app.route('/api/csv', methods=['GET'])
-def csv():
-    if request.method == 'GET':
-        model_creator.get_csv()
-        return {"data": "OK"}, 200
+def initiate_training(start_date: tuple, end_date: tuple):
+    if start_date == end_date:
+        model_factory.initiate_training_procedure(0, 0, 0, 0, 0, 0)
+    else:
+        model_factory.initiate_training_procedure(*start_date, *end_date)
+
+def process_uploaded_files(request, files_count):
+    for i in range(files_count):
+        file = request.files[f'file[{i}]']
+        validate_and_save_file(file)
+
+def validate_and_save_file(file):
+    if file.filename == '':
+        raise ValueError("Empty file uploaded")
+    if not allowed_file(file.filename):
+        raise ValueError("Unsupported file format")
+
+    filename = secure_filename(file.filename)
+    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+    
+def parse_date(date_str: str) -> tuple:
+    try:
+        year, month, day = map(int, date_str.split('-'))
+        return year, month, day
+    except ValueError:
+        raise ValueError("Date must be in 'YYYY-MM-DD' format")
     
 if __name__ == "__main__":
     app.run(debug = True)
