@@ -10,42 +10,6 @@ class DataBase:
                                       'Database=load_forecast;'
                                       'Trusted_Connection=yes;')
         cursor = database_con.cursor()
-        # cursor.execute('DROP TABLE dbo.ModelLearningData')
-        # cursor.execute('DROP TABLE dbo.AverageLoad')
-        # cursor.execute(
-	    #                     'CREATE TABLE dbo.ModelLearningData ('
-        #                         'Year smallint not null,'
-		#                         'Month tinyint not null,'
-        #                         'Day tinyint not null,'
-        #                         'Hour tinyint not null,'
-		#                         'Temp real not null,'
-		#                         'Feelslike real not null,'
-		#                         'Humidity real not null,' 
-		#                         'WindSpeed real not null,'
-        #                         'CloudCover real not null,'
-        #                         'WeeakDay tinyint not null,' 
-        #                         'Daylight bit not null,'
-		#                         'Load real not null'
-	    #                     ')')
-        # cursor.execute(
-	    #                     'CREATE TABLE dbo.AverageLoad ('
-        #                         'Year smallint not null,'
-		#                         'Month tinyint not null,'
-        #                         'Day tinyint not null,'
-		#                         'AvgLoad real not null'
-	    #                     ')')
-        # cursor.execute('DELETE FROM dbo.ModelLearningData WHERE 1=1')
-        # cursor.execute('DELETE FROM dbo.AverageLoad WHERE 1=1')
-        # #cursor.execute('DELETE FROM dbo.ModelLearningDataInput WHERE 1=1')
-        # #cursor.execute('DELETE FROM dbo.AverageLoadInput WHERE 1=1')
-        # #cursor.execute('SELECT TOP(5) * FROM dbo.ModelLearningData')
-        # cursor.execute('SELECT TOP(5) * FROM dbo.AverageLoad')
-        # #cursor.execute('SELECT TOP(5) * FROM dbo.ModelLearningDataInput')
-        # for row in cursor:
-        #    print(row)
-        #cursor.execute('SELECT TOP(5) * FROM dbo.AverageLoadInput')
-        # for row in cursor:
-        #    print(row)
         database_con.commit()
         cursor.close()
         database_con.close()
@@ -60,7 +24,7 @@ class DataBase:
         database_conn = self.connect()
         cursor = database_conn.cursor()
         
-        cursor.execute('DELETE FROM dbo.ModelLearningDataInput WHERE 1=1')
+        cursor.execute('DELETE FROM dbo.TestSet WHERE 1=1')
         
         database_conn.commit()
         cursor.close()
@@ -70,11 +34,13 @@ class DataBase:
         database_con = self.connect()
         cursor = database_con.cursor()
 
-        input = ''
+        table = ''
         if learning == False:
-            input = 'Input'
+            table = 'TestSet'
+        else:
+            table = "LearningSet"
 
-        sql = 'INSERT INTO dbo.ModelLearningData'+ input +' (Year, Month, Day, Hour, Temp, Feelslike, Humidity, WindSpeed, CloudCover, WeeakDay, Daylight, Load) ' \
+        sql = 'INSERT INTO dbo.'+ table +' (Year, Month, Day, Hour, Temp, Feelslike, Humidity, WindSpeed, CloudCover, WeeakDay, Daylight, Load) ' \
               'VALUES ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})'.format(
                 element.year, element.month, element.day, element.hour, element.temp, element.feels_like, element.humidity, element.wind_speed, element.cloud_cover, element.week_day, element.daylight, element.load
               )
@@ -82,6 +48,22 @@ class DataBase:
         database_con.commit()
         cursor.close()
         database_con.close()
+        
+    def insert_average_load_data(self, year_recorded, month_recorded, day_recorded, average_load, is_learning):
+        def execute_insert_query(connection, query):
+            with connection.cursor() as cursor:
+                cursor.execute(query)
+                connection.commit()
+
+        def construct_sql(year, month, day, load, learning):
+            table_suffix = 'Input' if not learning else ''
+            table_name = f'AverageLoad{table_suffix}'
+            return f'INSERT INTO dbo.{table_name} (Year, Month, Day, AvgLoad) VALUES ({year}, {month}, {day}, {load})'
+
+        db_connection = self.connect()
+        sql_query = construct_sql(year_recorded, month_recorded, day_recorded, average_load, is_learning)
+        execute_insert_query(db_connection, sql_query)
+        db_connection.close()
 
     def add_average_load(self, year, month, day, avg_load, learning):
         database_con = self.connect()
@@ -103,24 +85,22 @@ class DataBase:
     def get_pandas_dataframe(self, yearFrom, monthFrom, dayFrom, yearTo, monthTo, dayTo, learningData):
         database_con = self.connect()
         cursor = database_con.cursor()
-        #rows = cursor.execute(f'SELECT * FROM dbo.ModelLearningData where Month BETWEEN {monthFrom} AND {monthTo} AND Year BETWEEN {yearFrom} AND {yearTo} AND Day BETWEEN {dayFrom} AND {dayTo}')
         
-        # Example input dates (year, month, day)
         date_from = (dayFrom, monthFrom, yearFrom)  # 1st January 2023
         date_to = (dayTo, monthTo, yearTo)   # 31st January 2023
 
-        # Converting to 'YYYY-MM-DD' format
         date_from_str = f"{date_from[2]}-{str(date_from[1]).zfill(2)}-{str(date_from[0]).zfill(2)}"
         date_to_str = f"{date_to[2]}-{str(date_to[1]).zfill(2)}-{str(date_to[0]).zfill(2)}"
 
-        input = ""
-        if learningData is False:
-            input = "Input"        
+        table = ''
+        if learningData == False:
+            table = 'TestSet'
+        else:
+            table = "LearningSet"        
         
-        # Your SQL query
         query = f"""
         SELECT *
-        FROM dbo.ModelLearningData{input}
+        FROM dbo.{table}
         WHERE CAST(
                 CAST([Year] AS VARCHAR(4)) + '-' + 
                 RIGHT('0' + CAST([Month] AS VARCHAR(2)), 2) + '-' + 
@@ -129,15 +109,6 @@ class DataBase:
             BETWEEN '{date_from_str}' AND '{date_to_str}'
         """
         
-        # if learningData == True:  
-        #     sql = 'SELECT * FROM dbo.GetScaledModelVer2({},{},{},{},{},{})'.format(
-        #         yearFrom, monthFrom, dayFrom, yearTo, monthTo, dayTo
-        #     )
-        # else:
-        #     sql = 'SELECT * FROM dbo.GetScaledModelTestData({},{},{},{},{},{})'.format(
-        #         yearFrom, monthFrom, dayFrom, yearTo, monthTo, dayTo
-        #     )
-        # rows = cursor.execute(sql)
         df = pandas.read_sql(query, database_con) 
         cursor.close()
         database_con.close()
