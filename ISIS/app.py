@@ -2,9 +2,8 @@ import os
 from flask import Flask, request
 from werkzeug.utils import secure_filename
 from flask_cors import CORS
-from services.model_creator import ModelCreator
-
-from preprocessing.data_preprocessor import DataPreprocessor
+from services.model_factory import ModelFactory
+from services.preprocessor import Preprocessor
 
 UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploaded_files')
 ALLOWED_EXTENSIONS = {'csv'}
@@ -14,8 +13,8 @@ CORS(app)
 
 app.config['CORS_HEADERS'] = 'Content-Type'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-data_preprocessor = DataPreprocessor(UPLOAD_FOLDER)
-model_creator = ModelCreator()
+data_preprocessor = Preprocessor(UPLOAD_FOLDER)
+model_creator = ModelFactory()
 
 @app.route("/")
 def main():
@@ -55,9 +54,9 @@ def model_training():
         dateTo = request.form['dateTo'].split('-')
 
         if dateFrom[0] == dateTo[0] and dateFrom[1] == dateTo[1] and dateFrom[2] == dateTo[2]:
-            model_creator.start_model_training(0,0,0,0,0,0)
+            model_creator.initiate_training_procedure(0,0,0,0,0,0)
         else:
-            model_creator.start_model_training(int(dateFrom[0]),int(dateFrom[1]),int(dateFrom[2]),
+            model_creator.initiate_training_procedure(int(dateFrom[0]),int(dateFrom[1]),int(dateFrom[2]),
                                                int(dateTo[0]),int(dateTo[1]),int(dateTo[2]))
         return {"data": "OK"}, 200
 
@@ -68,7 +67,7 @@ def test():
         pred_days = request.form['days']
         pred_date = request.form['date'].split('-')
 
-        return model_creator.predict(int(pred_days), int(pred_date[0]), int(pred_date[1]), int(pred_date[2]), request.form['model'])
+        return model_creator.execute_forecast(int(pred_days), int(pred_date[0]), int(pred_date[1]), int(pred_date[2]), request.form['model'])
 
 @app.route('/api/csv', methods=['GET'])
 def csv():

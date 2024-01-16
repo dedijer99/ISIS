@@ -10,7 +10,7 @@ import math
 from data.learning_model import LearningModel
 from data.database import DataBase
 
-class DataPreprocessor:
+class Preprocessor:
     def __init__(self, files_folder_path):
         self.files_folder_path = files_folder_path
         self.town = 'N.Y.C.'
