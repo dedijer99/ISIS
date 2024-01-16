@@ -5,7 +5,7 @@ from flask_cors import CORS
 from services.model_factory import ModelFactory
 from services.preprocessor import Preprocessor
 
-UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'uploaded_files')
+UPLOAD_FOLDER = os.path.join(os.path.dirname(__file__), 'test_files')
 ALLOWED_EXTENSIONS = {'csv'}
 
 app = Flask(__name__)

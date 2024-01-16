@@ -16,7 +16,80 @@ class Preprocessor:
         self.town = 'N.Y.C.'
         self.database = DataBase()
 
-    def load_from_fs(self):
+    def load_uploaded_files(self):
+        
+        print ("loading uploaded files")
+        
+        self.database.clean_data_input()
+        path = self.getLocalFolder()
+        path.append('test_files')
+        path = '\\'.join(path)
+
+        loads = {}
+        weathers = []
+        
+        print("reading files")
+        for files in enumerate(os.walk(path)):
+            print(files)
+            temps = []
+            lastNonCompleteModel: LearningModel
+            nonCompleteExists = False
+            
+            for file in (files[1])[2]:
+                print(file)
+                data = pd.read_csv(os.path.join(path, file))
+                
+                for i in range(len(data.index)):
+                    print(i)
+                    weather_object = data.iloc[i]
+
+                    if str(weather_object['humidity']) == 'nan':
+                        continue
+
+                    if weather_object['humidity'] < 0 or weather_object['humidity'] > 100:
+                        continue
+
+                    if str(weather_object['temp']) == 'nan' or weather_object['temp'] < -20 or weather_object['temp'] > 115:
+                        if nonCompleteExists:
+                            print('ERROR: More than 1 temp missing in a row date-{}', data['datetime'])
+                            exit()
+                        nonCompleteExists = True
+                        lastNonCompleteModel = LearningModel(int(weather_object['datetime'][0:4]), int(weather_object['datetime'][5:7]), int(weather_object['datetime'][8:10]), int(weather_object['datetime'][11:13]), 0, weather_object['feelslike'],
+                        weather_object['humidity'], weather_object['windspeed'], weather_object['cloudcover'], #weather_object['solarradiation'],
+                        date(int(weather_object['datetime'][0:4]), int(weather_object['datetime'][5:7]), int(weather_object['datetime'][8:10])).weekday(), self.calculate_daylight(weather_object['datetime']), NaN)
+                        continue
+
+                    if nonCompleteExists:
+                        lastNonCompleteModel.temp = (temps[-1] + weather_object['temp']) / 2
+                        lastNonCompleteModel.feels_like = self.calculate_feelslike_temp(lastNonCompleteModel.temp, lastNonCompleteModel.wind_speed, lastNonCompleteModel.humidity)
+                        weathers.append(lastNonCompleteModel)
+                        nonCompleteExists = False
+                    
+                    temps.append(weather_object['temp'])
+                    weathers.append(LearningModel(int(weather_object['datetime'][0:4]), int(weather_object['datetime'][5:7]), int(weather_object['datetime'][8:10]), int(weather_object['datetime'][11:13]), weather_object['temp'], weather_object['feelslike'],
+                        weather_object['humidity'], weather_object['windspeed'], weather_object['cloudcover'], #weather_object['solarradiation'],
+                        date(int(weather_object['datetime'][0:4]), int(weather_object['datetime'][5:7]), int(weather_object['datetime'][8:10])).weekday(), self.calculate_daylight(weather_object['datetime']), NaN))
+            
+            break
+
+        for model in weathers:
+            print(model)
+            model.load = 0
+            self.write_to_db(model, False)
+
+    def getLocalFolder(self):
+        path=str(os.path.dirname(os.path.abspath(__file__))).split(os.sep)
+        return path[:-1]
+
+    def process_data(self):
+        self.load_uploaded_files()
+        #self.load_training_data()
+
+    def get_all_models(self):
+        for id, dirs in enumerate(os.walk(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'models'))):
+            return dirs[2]
+
+    def load_training_data(self):
         loads = {}
         temps = []
         lastNonCompleteModel: LearningModel
@@ -24,8 +97,6 @@ class Preprocessor:
         one_day_load = []
         current_day = None
         missing_datetime = None
-
-        print('Loading of load data starts at ', datetime.now())
         
         for id, dirs in enumerate(os.walk("C:\\Users\\VladimirDedijer\\Downloads\\66f44a_f15540d80467442ea1e768f32fbdf5e2\\Training Data\\NYS Load  Data")):
             if(id == 0):
@@ -66,7 +137,7 @@ class Preprocessor:
                                 one_day_load.append(load_object['Load'])
                                 current_day = datetime.strptime(load_object['Time Stamp'], '%m/%d/%Y %H:%M:%S').strftime('%Y-%m-%d')
                       
-        print('Loading of load data ends at {}', datetime.now())       
+        print('Loading of training data ends at {}', datetime.now())       
             
         for id, dirs in enumerate(os.walk("C:\\Users\\VladimirDedijer\\Downloads\\66f44a_f15540d80467442ea1e768f32fbdf5e2\\Training Data\\NYS Weather Data\\New York City, NY")):
             for file in dirs[2]:
@@ -152,70 +223,3 @@ class Preprocessor:
                 vFeelsLike = vFeelsLike + ((vRelativeHumidity-85)/10) * ((87-vTemperature)/5)
 
         return vFeelsLike
-
-    def load_uploaded_files(self):
-        self.database.clean_data_input()
-        path = self.getLocalFolder()
-        path.append('uploaded_files')
-        path = '\\'.join(path)
-
-        loads = {}
-        weathers = []
-        
-        for files in enumerate(os.walk(path)):
-            temps = []
-            lastNonCompleteModel: LearningModel
-            nonCompleteExists = False
-            
-            for file in (files[1])[2]:
-                data = pd.read_csv(os.path.join(path, file))
-                
-                for i in range(len(data.index)):
-                    weather_object = data.iloc[i]
-
-                    if str(weather_object['humidity']) == 'nan':
-                        continue
-
-                    if weather_object['humidity'] < 0 or weather_object['humidity'] > 100:
-                        continue
-
-                    if str(weather_object['temp']) == 'nan' or weather_object['temp'] < -20 or weather_object['temp'] > 115:
-                        if nonCompleteExists:
-                            print('ERROR: More than 1 temp missing in a row date-{}', data['datetime'])
-                            exit()
-                        nonCompleteExists = True
-                        lastNonCompleteModel = LearningModel(int(weather_object['datetime'][0:4]), int(weather_object['datetime'][5:7]), int(weather_object['datetime'][8:10]), int(weather_object['datetime'][11:13]), 0, weather_object['feelslike'],
-                        weather_object['humidity'], weather_object['windspeed'], weather_object['cloudcover'], #weather_object['solarradiation'],
-                        date(int(weather_object['datetime'][0:4]), int(weather_object['datetime'][5:7]), int(weather_object['datetime'][8:10])).weekday(), self.calculate_daylight(weather_object['datetime']), NaN)
-                        continue
-
-                    if nonCompleteExists:
-                        lastNonCompleteModel.temp = (temps[-1] + weather_object['temp']) / 2
-                        lastNonCompleteModel.feels_like = self.calculate_feelslike_temp(lastNonCompleteModel.temp, lastNonCompleteModel.wind_speed, lastNonCompleteModel.humidity)
-                        weathers.append(lastNonCompleteModel)
-                        nonCompleteExists = False
-                    
-                    temps.append(weather_object['temp'])
-                    weathers.append(LearningModel(int(weather_object['datetime'][0:4]), int(weather_object['datetime'][5:7]), int(weather_object['datetime'][8:10]), int(weather_object['datetime'][11:13]), weather_object['temp'], weather_object['feelslike'],
-                        weather_object['humidity'], weather_object['windspeed'], weather_object['cloudcover'], #weather_object['solarradiation'],
-                        date(int(weather_object['datetime'][0:4]), int(weather_object['datetime'][5:7]), int(weather_object['datetime'][8:10])).weekday(), self.calculate_daylight(weather_object['datetime']), NaN))
-            
-            break
-
-        for model in weathers:
-            model.load = 0
-            self.write_to_db(model, False)
-
-    def getLocalFolder(self):
-        path=str(os.path.dirname(os.path.abspath(__file__))).split(os.sep)
-        return path[:-1]
-
-    def process_data(self):
-        self.load_uploaded_files()
-        #self.load_from_fs()
-
-    def get_all_models(self):
-        for id, dirs in enumerate(os.walk(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'models'))):
-            return dirs[2]
-
-    
